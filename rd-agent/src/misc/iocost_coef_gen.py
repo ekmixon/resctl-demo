@@ -99,7 +99,7 @@ def dir_to_dev(path):
     devname = os.path.basename(devname)
 
     # partition -> whole device
-    parents = glob.glob('/sys/block/*/' + devname)
+    parents = glob.glob(f'/sys/block/*/{devname}')
     if len(parents):
         devname = os.path.basename(os.path.dirname(parents[0]))
     return devname
@@ -116,7 +116,7 @@ def create_testfile(path, size):
     cmd = (f'dd if=/dev/urandom of={path} count={size} '
            f'iflag=count_bytes,fullblock oflag=direct bs=16M status=none')
     p = subprocess.Popen(cmd, shell=True)
-    while p.poll() == None:
+    while p.poll() is None:
         try:
             cur = os.stat(path).st_size
             info(f'Creating {size/(1<<30):.2f}G testfile: {cur/size*100:.2f}%')
@@ -301,7 +301,7 @@ with open(elevator_path, 'r') as f:
 with open(nomerges_path, 'r') as f:
     nomerges = f.read().strip()
 
-info(f'Temporarily disabling elevator and merges')
+info('Temporarily disabling elevator and merges')
 atexit.register(restore_elevator_nomerges)
 with open(elevator_path, 'w') as f:
     f.write('none')

@@ -18,7 +18,7 @@ TRIES = 3
 def read_meminfo():
     meminfo = {}
     with open("/proc/meminfo", "r") as f:
-        for line in f.readlines():
+        for line in f:
             toks = line.replace(":", " ").split()
             if len(toks) < 3:
                 meminfo[toks[0]] = int(toks[1])
@@ -29,7 +29,7 @@ def read_meminfo():
 def read_vmstat():
     vmstat = {}
     with open("/proc/vmstat", "r") as f:
-        for line in f.readlines():
+        for line in f:
             toks = line.split()
             vmstat[toks[0]] = int(toks[1])
     return vmstat
@@ -52,13 +52,13 @@ def one_round(inodesteal_target, prefix):
           file=sys.stderr, flush=True)
 
     # Instantiate inode cache and revisit to activate.
-    for i in range(2):
+    for _ in range(2):
         for j in range(NR_FILES):
-            with open(TF_DIR + f"/{j}", "r") as f:
+            with open(f"{TF_DIR}/{j}", "r") as f:
                 f.read()
 
     # Add some inactive page cache.
-    with open(TF_DIR + "/inactive", "w+") as f:
+    with open(f"{TF_DIR}/inactive", "w+") as f:
         f.truncate(2 * target_swap)
         f.read()
 
@@ -103,7 +103,7 @@ def one_round(inodesteal_target, prefix):
 # First, populate the testfiles.
 os.makedirs(TF_DIR, exist_ok=True)
 for i in range(NR_FILES):
-    with open(TF_DIR + f"/{i}", "w") as f:
+    with open(f"{TF_DIR}/{i}", "w") as f:
         f.truncate(4096)
 os.sync()
 

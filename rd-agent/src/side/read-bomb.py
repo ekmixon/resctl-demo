@@ -16,11 +16,7 @@ if len(sys.argv) < 2:
 
 dev = "/dev/" + os.environ.get("IO_DEV")
 depth = int(sys.argv[1])
-if len(sys.argv) >= 3:
-    size = int(sys.argv[2])
-else:
-    size = 4096
-
+size = int(sys.argv[2]) if len(sys.argv) >= 3 else 4096
 jobs = min(JOBS, math.ceil(depth / MIN_DEPTH_PER_JOB))
 depth = math.ceil(depth / jobs)
 

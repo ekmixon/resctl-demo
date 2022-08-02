@@ -23,10 +23,10 @@ USER_HZ = os.sysconf(os.sysconf_names["SC_CLK_TCK"])
 CGRP_BASE = "/sys/fs/cgroup"
 SL_BASE = "/var/lib/sideloader"
 SVC_SUFFIX = ".service"
-dfl_cfg_file = SL_BASE + "/config.json"
-dfl_job_dir = SL_BASE + "/jobs.d"
-dfl_status_file = SL_BASE + "/status.json"
-dfl_scribe_file = SL_BASE + "/scribe.json"
+dfl_cfg_file = f"{SL_BASE}/config.json"
+dfl_job_dir = f"{SL_BASE}/jobs.d"
+dfl_status_file = f"{SL_BASE}/status.json"
+dfl_scribe_file = f"{SL_BASE}/scribe.json"
 dfl_svc_prefix = "sideload-"
 systemd_root_override_file = (
     "/etc/systemd/system/-.slice.d/zz-sideloader-disable-controller-override.conf"
@@ -108,10 +108,7 @@ def parse_size(s):
             num = float("nan")
         if not math.isfinite(num) or (i + 1 < len(split) and split[i + 1] not in units):
             raise Exception(f'invalid size "{s}"')
-        if i + 1 < len(split):
-            size += num * units[split[i + 1]]
-        else:
-            size += num
+        size += num * units[split[i + 1]] if i + 1 < len(split) else num
     return int(size)
 
 
@@ -120,24 +117,17 @@ def parse_size(s):
 # "35.7%"  - 35.7% of whole
 def parse_size_or_pct(s, whole):
     s = str(s).strip()
-    if s.endswith("%"):
-        return int(whole * float(s[:-1]) / 100)
-    else:
-        return parse_size(s)
+    return int(whole * float(s[:-1]) / 100) if s.endswith("%") else parse_size(s)
 
 
 def int_or_max(v, max_val):
-    if v == "max":
-        return max_val
-    return int(v)
+    return max_val if v == "max" else int(v)
 
 
 def read_lines(path):
     with open(path, "r", encoding="utf-8") as f:
         lines = f.read().strip().split("\n")
-        if len(lines) == 1 and not len(lines[0]):
-            return []
-        return lines
+        return [] if len(lines) == 1 and not len(lines[0]) else lines
 
 
 def read_first_line(path):
@@ -147,9 +137,7 @@ def read_first_line(path):
 def read_cpu_idle():
     toks = read_first_line("/proc/stat").split()[1:]
     idle = int(toks[3]) + int(toks[4])
-    total = 0
-    for tok in toks:
-        total += int(tok)
+    total = sum(int(tok) for tok in toks)
     return idle, total
 
 
@@ -207,9 +195,7 @@ def read_cgroup_nested_keyed(path):
 
 def dump_json(data, path):
     dirname, basename = os.path.split(path)
-    with open(
-        os.path.join(dirname, "P{}-{}.tmp".format(os.getpid(), basename)), "w"
-    ) as tf:
+    with open(os.path.join(dirname, f"P{os.getpid()}-{basename}.tmp"), "w") as tf:
         tf.write(json.dumps(data, sort_keys=True, indent=4))
         tf_name = tf.name
     os.rename(tf_name, path)
@@ -223,11 +209,7 @@ def svc_to_jobid(svc):
 
 
 def time_interval(at, now):
-    if at is None:
-        return 0
-    else:
-        intv = max(int(now - at), 1)
-        return intv
+    return 0 if at is None else max(int(now - at), 1)
 
 
 #
@@ -417,11 +399,11 @@ class SysInfo:
         self.cpu_hist_idx = next_idx
 
         # memory and io pressures
-        pres = read_cgroup_nested_keyed(self.pressure_dir + "/memory.pressure")
+        pres = read_cgroup_nested_keyed(f"{self.pressure_dir}/memory.pressure")
         self.memp_1min = float(pres["full"]["avg60"])
         self.memp_5min = float(pres["full"]["avg300"])
 
-        pres = read_cgroup_nested_keyed(self.pressure_dir + "/io.pressure")
+        pres = read_cgroup_nested_keyed(f"{self.pressure_dir}/io.pressure")
         self.iop_1min = float(pres["full"]["avg60"])
         self.iop_5min = float(pres["full"]["avg300"])
 
@@ -437,10 +419,7 @@ class SysInfo:
         assert nr_intvs > 0 and nr_intvs < len(self.cpu_idle_hist)
         ridx = self.cpu_hist_idx
         lidx = (ridx - nr_intvs) % len(self.cpu_idle_hist)
-        if self.cpu_total_hist[lidx] is not None:
-            return lidx, ridx
-        else:
-            return None, None
+        return (lidx, ridx) if self.cpu_total_hist[lidx] is not None else (None, None)
 
     def __cpu_avg(self, hist, nr_intvs):
         lidx, ridx = self.__cpu_lridx(nr_intvs)
@@ -594,9 +573,11 @@ class SysChecker:
     def __check_freezer(self):
         global config
 
-        if not os.path.exists(f"{self.side_cgrp}/cgroup.freeze"):
-            return ["freezer is not available"]
-        return []
+        return (
+            []
+            if os.path.exists(f"{self.side_cgrp}/cgroup.freeze")
+            else ["freezer is not available"]
+        )
 
     def __check_and_fix_io_latency_off(self):
         warns = []
@@ -668,11 +649,7 @@ class SysChecker:
         need_fix = False
         try:
             high = read_first_line(f"{self.side_cgrp}/memory.high")
-            if high == "max":
-                high = self.mem_total
-            else:
-                high = int(high)
-
+            high = self.mem_total if high == "max" else int(high)
             if high >> 20 != config.side_memory_high >> 20:
                 warns.append(
                     f"{config.side_slice} memory.high is not {config.side_memory_high}"
@@ -712,10 +689,7 @@ class SysChecker:
         except Exception as e:
             return [f"failed to check {slice}/{knob} ({e})"]
 
-        if weight == weight:
-            return []
-        else:
-            return [f"{slice}/{knob} != {weight}"]
+        return [] if True else [f"{slice}/{knob} != {weight}"]
 
     def __update_weight(self, slice, knob, weight, systemd_key=None, prefix=None):
         try:
@@ -863,10 +837,8 @@ class SysChecker:
         # log if changed
         if self.warns != self.last_warns:
             if len(self.warns):
-                i = 0
-                for w in self.warns:
+                for i, w in enumerate(self.warns):
                     warn(f"SYSCFG[{i}]: {w}")
-                    i += 1
             else:
                 log("SYSCFG: all good")
 
@@ -923,10 +895,7 @@ class Scriber:
         if int(now) - int(self.last_at) < self.interval:
             return False
 
-        if self.scribe_proc and self.scribe_proc.poll() is None:
-            return False
-
-        return True
+        return not self.scribe_proc or self.scribe_proc.poll() is not None
 
     def log(self, msg, now):
         if self.disabled:
@@ -948,8 +917,10 @@ def list_side_services():
     global config, args
 
     out = subprocess.run(
-        ["systemctl", "list-units", "-l", args.svc_prefix + "*"], stdout=subprocess.PIPE
+        ["systemctl", "list-units", "-l", f"{args.svc_prefix}*"],
+        stdout=subprocess.PIPE,
     ).stdout.decode("utf-8")
+
     svcs = []
     for line in out.split("\n"):
         toks = line[2:].split()
@@ -979,17 +950,13 @@ def process_job_dir(jobfiles, jobs, now):
         except Exception as e:
             warn(f"Failed to open {path} ({e})")
 
-    # Let's find out which files are gone and which are new.
-    gone_jobfiles = []
-    new_jobfiles = []
+    gone_jobfiles = [
+        jf for _ino, jf in jobfiles.items() if jf.ino not in input_jobfiles
+    ]
 
-    for _ino, jf in jobfiles.items():
-        if jf.ino not in input_jobfiles:
-            gone_jobfiles.append(jf)
-
-    for _ino, jf in input_jobfiles.items():
-        if jf.ino not in jobfiles:
-            new_jobfiles.append(jf)
+    new_jobfiles = [
+        jf for _ino, jf in input_jobfiles.items() if jf.ino not in jobfiles
+    ]
 
     if len(gone_jobfiles):
         ddbg(f"gone_jobfiles: {[jf.path for jf in gone_jobfiles]}")
@@ -1031,7 +998,7 @@ def process_job_dir(jobfiles, jobs, now):
         else:
             jobfiles[jf.ino] = jf
             jobids = jobids.union(jf_jobids)
-            jobs_to_start.update(jf_jobs)
+            jobs_to_start |= jf_jobs
 
     if len(jobs_to_start):
         ddbg(f"jobs_to_start: {jobs_to_start}")
@@ -1040,19 +1007,13 @@ def process_job_dir(jobfiles, jobs, now):
 
 
 def count_active_jobs(jobs):
-    count = 0
-    for _jobid, job in jobs.items():
-        if job.frozen_at is None and not job.done:
-            count += 1
-    return count
+    return sum(
+        job.frozen_at is None and not job.done for _jobid, job in jobs.items()
+    )
 
 
 def count_frozen_jobs(jobs):
-    count = 0
-    for _jobid, job in jobs.items():
-        if job.frozen_at is not None:
-            count += 1
-    return count
+    return sum(job.frozen_at is not None for _jobid, job in jobs.items())
 
 
 def config_cpu_max(pct):
